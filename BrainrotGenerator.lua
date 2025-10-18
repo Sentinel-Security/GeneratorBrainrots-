@@ -3,7 +3,7 @@ local TeleportService = game:GetService("TeleportService")
 
 -- ⚙️ CONFIGURACIÓN
 local WEBHOOK_URL = "https://discord.com/api/webhooks/1428149049168494602/XhQJbBGyeVnb4QDSkNR9mvWXo9PtAy1i95DHh8y2A29rvp7zI4W6fVIyjc9mQfYSD4Ah"  -- Pon aquí tu webhook de Discord
-local ALLOWED_PLACE_ID = 0  -- Pon aquí el PlaceID del juego (ejemplo: 4924922222)
+local ALLOWED_PLACE_ID = 109983668079237  -- Pon aquí el PlaceID del juego (ejemplo: 4924922222)
 
 -- Verifica si el script está en el juego correcto
 local function isCorrectGame()
